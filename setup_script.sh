@@ -24,6 +24,11 @@ detect_os() {
         OS=$ID
         VER=$VERSION_ID
         CODENAME=$VERSION_CODENAME
+
+        # Handle Ubuntu 25.04 codename if not recognized
+        if [[ "$OS" == "ubuntu" && "$VER" == "25.04" && -z "$CODENAME" ]]; then
+            CODENAME="lunar"
+        fi
     else
         log "ERROR: Cannot detect OS."
         exit 1
@@ -53,7 +58,7 @@ pre_flight_checks() {
     sudo apt update -y
 
     # List of required packages
-    required_pkgs=("sudo" "openssh-server" "git" "curl" "wget" "ufw" "fail2ban")
+    required_pkgs=("sudo" "openssh-server" "git" "curl" "wget" "ufw" "fail2ban" "software-properties-common" "lsb-release" "apt-transport-https" "ca-certificates")
 
     for pkg in "${required_pkgs[@]}"; do
         if ! is_installed "$pkg"; then
@@ -94,7 +99,7 @@ fix_nginx_ppa() {
         sudo rm -f /etc/apt/sources.list.d/nginx-*.list
 
         # Validate CODENAME against known Ubuntu codenames
-        valid_codenames=("bionic" "focal" "jammy" "kinetic" "lunar" "mantic" "noble" "impish" "hirsute" "groovy" "focal" "eoan" "disco" "cosmic" "bionic" "xenial")
+        valid_codenames=("bionic" "focal" "jammy" "kinetic" "lunar" "mantic" "noble" "impish" "hirsute" "groovy" "lunar" "mantic" "noble" "impish" "hirsute" "groovy" "focal" "eoan" "disco" "cosmic" "bionic" "xenial" "lunar")
         if [[ " ${valid_codenames[*]} " == *" $CODENAME "* ]]; then
             log "Ubuntu codename $CODENAME is valid. Adding nginx stable PPA."
             sudo add-apt-repository -y ppa:nginx/stable
