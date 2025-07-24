@@ -86,6 +86,9 @@ fix_nginx_ppa() {
         # Remove any PPA files containing 'oracular' explicitly
         sudo find /etc/apt/sources.list.d/ -type f -name "*.list" -exec grep -l "oracular" {} \; | xargs -r sudo rm -f
 
+        # Just in case, remove the nginx stable PPA if it exists
+        sudo add-apt-repository --remove ppa:nginx/stable
+
         # Remove any existing nginx stable PPA entries from sources.list and sources.list.d
         sudo sed -i '/nginx/d' /etc/apt/sources.list
         sudo rm -f /etc/apt/sources.list.d/nginx-*.list
