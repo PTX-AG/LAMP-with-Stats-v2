@@ -133,9 +133,9 @@ install_nginx() {
         cd nginx-${NGINX_VERSION}
 
         # Clone ngx_brotli
-        git clone --depth 1 https://github.com/google/ngx_brotli.git
+        git clone --depth 1 --recursive https://github.com/google/ngx_brotli.git
         cd ngx_brotli
-        git submodule update --init
+        make
         cd ..
 
         # Configure NGINX
