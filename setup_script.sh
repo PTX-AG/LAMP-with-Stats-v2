@@ -216,7 +216,7 @@ install_nginx() {
 
         # Clean up
         cd ../../..
-        rm -rf "$(dirname "$BUILD_DIR")"
+        # rm -rf "$(dirname "$BUILD_DIR")"
 
         # Create nginx user and group if not exists
         if ! getent group nginx >/dev/null; then
