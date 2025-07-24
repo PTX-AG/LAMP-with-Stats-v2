@@ -131,8 +131,14 @@ install_nginx() {
         mkdir -p "$BUILD_DIR"
         cd "$BUILD_DIR"
 
-        # Download NGINX source
-        NGINX_VERSION="1.26.1"
+        # Fetch the latest stable version of NGINX dynamically
+        NGINX_VERSION=$(curl -s https://nginx.org/en/download.html | grep -oP 'nginx-\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
+        if [ -z "$NGINX_VERSION" ]; then
+            log "ERROR: Unable to fetch the latest NGINX version. Exiting."
+            exit 1
+        fi
+        log "Latest NGINX version found: $NGINX_VERSION"
+        sleep 2
         wget https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
         tar -zxf nginx-${NGINX_VERSION}.tar.gz
         cd nginx-${NGINX_VERSION}
