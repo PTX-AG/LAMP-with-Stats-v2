@@ -132,6 +132,11 @@ install_nginx() {
         tar -zxf nginx-${NGINX_VERSION}.tar.gz
         cd nginx-${NGINX_VERSION}
 
+        # Remove existing ngx_brotli directory if it exists to avoid clone errors
+        if [ -d "ngx_brotli" ]; then
+            rm -rf ngx_brotli
+        fi
+
         # Clone ngx_brotli
         git clone --depth 1 --recursive https://github.com/google/ngx_brotli.git
         cd ngx_brotli
