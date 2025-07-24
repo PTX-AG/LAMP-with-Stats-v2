@@ -54,13 +54,23 @@ command_exists() {
 # Function to remove ondrej/php PPA for Ubuntu 25.04 before any apt update
 remove_ondrej_php_ppa_if_lunar() {
     if [ "$OS" = "ubuntu" ] && [ "$CODENAME" = "lunar" ]; then
-        if grep -r "ondrej/php" /etc/apt/sources.list.d/ > /dev/null 2>&1; then
-            log "Removing ondrej/php PPA for Ubuntu 25.04 (lunar) due to lack of support."
-            sudo add-apt-repository --remove -y ppa:ondrej/php || true
-            sudo rm -f /etc/apt/sources.list.d/ondrej-php-*.list || true
-            sudo sed -i '/ondrej\/php/d' /etc/apt/sources.list || true
-            sudo apt-key list | grep -B 1 "ondrej" | grep pub | awk '{print $2}' | xargs -r -I{} sudo apt-key del {} || true
-        fi
+        log "Removing ondrej/php PPA for Ubuntu 25.04 (lunar) due to lack of support."
+        # Remove PPA via add-apt-repository
+        sudo add-apt-repository --remove -y ppa:ondrej/php || true
+        # Remove PPA list files
+        sudo rm -f /etc/apt/sources.list.d/ondrej-php-*.list || true
+        # Remove any ondrej/php entries from sources.list
+        sudo sed -i '/ondrej\/php/d' /etc/apt/sources.list || true
+        # Remove any ondrej/php entries in sources.list.d files
+        sudo find /etc/apt/sources.list.d/ -type f -exec sed -i '/ondrej\/php/d' {} \; || true
+        # Remove any ondrej/php keys
+        sudo apt-key list | grep -B 1 "ondrej" | grep pub | awk '{print $2}' | xargs -r -I{} sudo apt-key del {} || true
+        # Remove any ondrej/php entries in /etc/apt/preferences.d/
+        sudo find /etc/apt/preferences.d/ -type f -exec sed -i '/ondrej\/php/d' {} \; || true
+        # Remove any ondrej/php entries in /etc/apt/apt.conf.d/
+        sudo find /etc/apt/apt.conf.d/ -type f -exec sed -i '/ondrej\/php/d' {} \; || true
+        # Remove any ondrej/php entries in /etc/apt/trusted.gpg.d/
+        sudo rm -f /etc/apt/trusted.gpg.d/ondrej-php-*.gpg || true
     fi
 }
 
@@ -289,8 +299,10 @@ brotli_comp_level 6;
 brotli_types text/plain text/css application/javascript application/x-javascript text/xml application/xml application/xml+rss text/javascript;
 
 # HTTP/3 (QUIC)
-listen 443 quic reuseport;
+listen 443 ssl quic reuseport;
 http3 on;
+ssl_certificate /etc/nginx/ssl/nginx.crt;
+ssl_certificate_key /etc/nginx/ssl/nginx.key;
 
 # SSL optimizations
 ssl_protocols TLSv1.2 TLSv1.3;
