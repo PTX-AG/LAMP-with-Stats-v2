@@ -144,8 +144,14 @@ install_nginx() {
         cd deps/brotli
         mkdir -p build
         cd build
-        cmake ..
-        make
+        if ! cmake ..; then
+            log "ERROR: cmake configuration failed in brotli build."
+            exit 1
+        fi
+        if ! make; then
+            log "ERROR: make failed in brotli build."
+            exit 1
+        fi
         cd ../../..
 
         # Configure NGINX
