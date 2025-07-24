@@ -155,8 +155,8 @@ install_nginx() {
         cd ngx_brotli
         git submodule update --init --recursive
         cd deps/brotli
-        mkdir -p build
-        cd build
+        mkdir -p out
+        cd out
         if ! cmake ..; then
             log "ERROR: cmake configuration failed in brotli build."
             exit 1
@@ -165,7 +165,13 @@ install_nginx() {
             log "ERROR: make failed in brotli build."
             exit 1
         fi
-        sudo make install
+        # Do not install brotli system-wide; keep libraries local for linking
+        # sudo make install
+
+        # Debugging output: list brotli out directory contents
+        echo "Brotli out directory contents:"
+        ls -l
+
         cd "$HOME/nginx-${NGINX_VERSION}"
 
     # Display the current directory
@@ -174,6 +180,11 @@ install_nginx() {
     # Pause for 5 seconds
     sleep 5
         # Configure NGINX
+        # Set linker and compiler flags to find brotli libraries in the out directory
+        BROTLI_DIR="$(pwd)/ngx_brotli/deps/brotli/out"
+        export LDFLAGS="-L${BROTLI_DIR} $LDFLAGS"
+        export CPPFLAGS="-I${BROTLI_DIR}/include $CPPFLAGS"
+        echo "Running configure with LDFLAGS=$LDFLAGS and CPPFLAGS=$CPPFLAGS"
         ./configure \
             --prefix=/etc/nginx \
             --sbin-path=/usr/sbin/nginx \
