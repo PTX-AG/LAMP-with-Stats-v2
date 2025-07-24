@@ -126,6 +126,11 @@ install_nginx() {
         sudo apt update -y
         sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev git cmake
 
+        # Create build directory
+        BUILD_DIR="$(pwd)/build/nginx-${NGINX_VERSION}"
+        mkdir -p "$BUILD_DIR"
+        cd "$BUILD_DIR"
+
         # Download NGINX source
         NGINX_VERSION="1.26.1"
         wget https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
@@ -185,8 +190,8 @@ install_nginx() {
         sudo make install
 
         # Clean up
-        cd ..
-        rm -rf nginx-${NGINX_VERSION} nginx-${NGINX_VERSION}.tar.gz
+        cd ../../..
+        rm -rf "$(dirname "$BUILD_DIR")"
 
         # Create nginx user and group if not exists
         if ! getent group nginx >/dev/null; then
