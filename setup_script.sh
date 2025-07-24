@@ -228,7 +228,7 @@ install_nginx() {
             sudo addgroup --system nginx
         fi
         if ! getent passwd nginx >/dev/null; then
-            sudo adduser --system --group nginx --no-create-home --shell /bin/false nginx
+            sudo adduser --system --no-create-home --shell /bin/false --gid nginx nginx
         fi
 
         # Set up systemd service
