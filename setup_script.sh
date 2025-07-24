@@ -170,8 +170,8 @@ install_nginx() {
     # Display the current directory
     echo "Current directory: $(pwd)"
 
-    # Pause for 15 seconds
-    sleep 15
+    # Pause for 5 seconds
+    sleep 5
         # Configure NGINX
         ./configure \
             --prefix=/etc/nginx \
