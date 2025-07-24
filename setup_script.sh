@@ -157,7 +157,7 @@ install_nginx() {
             log "ERROR: make failed in brotli build."
             exit 1
         fi
-        cd ../../..
+        cd ../../../../
 
     # Display the current directory
     echo "Current directory: $(pwd)"
