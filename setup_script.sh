@@ -126,22 +126,24 @@ install_nginx() {
         sudo apt update -y
         sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev git cmake
 
-        # Create build directory
-        BUILD_DIR="$(pwd)/build/nginx-${NGINX_VERSION}"
-        mkdir -p "$BUILD_DIR"
-        cd "$BUILD_DIR"
-
         # Fetch the latest stable version of NGINX dynamically
         NGINX_VERSION=$(curl -s https://nginx.org/en/download.html | grep -oP 'nginx-\K[0-9]+\.[0-9]+\.[0-9]+' | head -1)
         if [ -z "$NGINX_VERSION" ]; then
             log "ERROR: Unable to fetch the latest NGINX version. Exiting."
             exit 1
         fi
-        log "Latest NGINX version found: $NGINX_VERSION"
-        sleep 2
+        echo "Latest NGINX version found: $NGINX_VERSION"
+        sleep 5
         wget https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
         tar -zxf nginx-${NGINX_VERSION}.tar.gz
         cd nginx-${NGINX_VERSION}
+
+
+        # Create build directory
+        BUILD_DIR="$(pwd)/build/nginx-${NGINX_VERSION}"
+        mkdir -p "$BUILD_DIR"
+        cd "$BUILD_DIR"
+
 
         # Remove existing ngx_brotli directory if it exists to avoid clone errors
         if [ -d "ngx_brotli" ]; then
@@ -163,7 +165,7 @@ install_nginx() {
             log "ERROR: make failed in brotli build."
             exit 1
         fi
-        cd ../../../../
+        cd "$HOME/nginx-${NGINX_VERSION}"
 
     # Display the current directory
     echo "Current directory: $(pwd)"
