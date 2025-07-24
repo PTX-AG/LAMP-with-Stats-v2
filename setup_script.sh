@@ -51,8 +51,24 @@ command_exists() {
 }
 
 # Function for pre-flight checks
+# Function to remove ondrej/php PPA for Ubuntu 25.04 before any apt update
+remove_ondrej_php_ppa_if_lunar() {
+    if [ "$OS" = "ubuntu" ] && [ "$CODENAME" = "lunar" ]; then
+        if grep -r "ondrej/php" /etc/apt/sources.list.d/ > /dev/null 2>&1; then
+            log "Removing ondrej/php PPA for Ubuntu 25.04 (lunar) due to lack of support."
+            sudo add-apt-repository --remove -y ppa:ondrej/php || true
+            sudo rm -f /etc/apt/sources.list.d/ondrej-php-*.list || true
+            sudo sed -i '/ondrej\/php/d' /etc/apt/sources.list || true
+            sudo apt-key list | grep -B 1 "ondrej" | grep pub | awk '{print $2}' | xargs -r -I{} sudo apt-key del {} || true
+        fi
+    fi
+}
+
 pre_flight_checks() {
     log "Starting pre-flight checks..."
+
+    # Remove ondrej/php PPA if Ubuntu 25.04 before updating package list
+    remove_ondrej_php_ppa_if_lunar
 
     # Update package list
     sudo apt update -y
