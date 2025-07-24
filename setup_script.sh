@@ -153,6 +153,7 @@ install_nginx() {
             exit 1
         fi
         cd ../../..
+        cd ../nginx-${NGINX_VERSION}
 
         # Configure NGINX
         ./configure \
