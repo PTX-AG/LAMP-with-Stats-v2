@@ -8,8 +8,8 @@ set -e
 LOG_FILE="/var/log/setup_script.log"
 USERNAME=""
 PASSWORD=""
-SIGNOZ_URL=""
-SIGNOZ_KEY=""
+SIGNOZ_REGION=""
+SIGNOZ_INGESTION_KEY=""
 
 # Logging function with timestamps
 log() {
@@ -23,6 +23,7 @@ detect_os() {
         . /etc/os-release
         OS=$ID
         VER=$VERSION_ID
+        CODENAME=$VERSION_CODENAME
     else
         log "ERROR: Cannot detect OS."
         exit 1
@@ -31,7 +32,7 @@ detect_os() {
         log "ERROR: This script supports only Ubuntu and Debian."
         exit 1
     fi
-    log "Detected OS: $OS $VER"
+    log "Detected OS: $OS $VER (Codename: $CODENAME)"
 }
 
 # Function to check if a package is installed
@@ -77,34 +78,108 @@ pre_flight_checks() {
     log "Pre-flight checks completed."
 }
 
-# Function to install and configure NGINX
+# Function to install and configure NGINX with Brotli and HTTP/3
 install_nginx() {
     log "Starting NGINX installation and optimization..."
 
-    # Add NGINX stable repository (for latest with modules)
-    if ! is_installed "nginx"; then
-        sudo apt install -y software-properties-common
-        if [ "$OS" = "ubuntu" ]; then
-            sudo add-apt-repository -y ppa:nginx/stable
-        else # Debian
-            echo "deb http://nginx.org/packages/debian/ $VERSION_CODENAME nginx" | sudo tee /etc/apt/sources.list.d/nginx.list
-            curl -o /tmp/nginx_signing.key https://nginx.org/keys/nginx_signing.key
-            sudo mv /tmp/nginx_signing.key /etc/apt/trusted.gpg.d/nginx_signing.asc
-        fi
-        sudo apt update -y
-        sudo apt install -y nginx
+    # Check if NGINX is installed with required modules
+    if command_exists nginx && nginx -V 2>&1 | grep -q ngx_brotli && nginx -V 2>&1 | grep -q http_v3_module; then
+        log "NGINX is already installed with Brotli and HTTP/3 support."
     else
-        log "NGINX is already installed."
+        log "Building NGINX from source with Brotli and HTTP/3 support..."
+
+        # Install build dependencies
+        sudo apt update -y
+        sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev git
+
+        # Download NGINX source
+        NGINX_VERSION="1.26.1"
+        wget https://nginx.org/download/nginx-${NGINX_VERSION}.tar.gz
+        tar -zxf nginx-${NGINX_VERSION}.tar.gz
+        cd nginx-${NGINX_VERSION}
+
+        # Clone ngx_brotli
+        git clone --depth 1 https://github.com/google/ngx_brotli.git
+        cd ngx_brotli
+        git submodule update --init
+        cd ..
+
+        # Configure NGINX
+        ./configure \
+            --prefix=/etc/nginx \
+            --sbin-path=/usr/sbin/nginx \
+            --modules-path=/usr/lib/nginx/modules \
+            --conf-path=/etc/nginx/nginx.conf \
+            --error-log-path=/var/log/nginx/error.log \
+            --http-log-path=/var/log/nginx/access.log \
+            --pid-path=/var/run/nginx.pid \
+            --lock-path=/var/run/nginx.lock \
+            --user=nginx \
+            --group=nginx \
+            --with-compat \
+            --add-dynamic-module=ngx_brotli \
+            --with-http_ssl_module \
+            --with-http_v2_module \
+            --with-http_v3_module \
+            --with-stream \
+            --with-stream_ssl_module \
+            --with-stream_realip_module \
+            --with-stream_ssl_preread_module \
+            --with-http_gzip_static_module \
+            --with-http_stub_status_module \
+            --with-threads \
+            --with-file-aio
+
+        # Build and install
+        make
+        sudo make install
+
+        # Clean up
+        cd ..
+        rm -rf nginx-${NGINX_VERSION} nginx-${NGINX_VERSION}.tar.gz
+
+        # Create nginx user and group if not exists
+        if ! getent group nginx >/dev/null; then
+            sudo addgroup --system nginx
+        fi
+        if ! getent passwd nginx >/dev/null; then
+            sudo adduser --system --group nginx --no-create-home --shell /bin/false nginx
+        fi
+
+        # Set up systemd service
+        cat <<EOF | sudo tee /etc/systemd/system/nginx.service
+[Unit]
+Description=NGINX Open Source - high performance web server
+After=network-online.target remote-fs.target nss-lookup.target
+Wants=network-online.target
+
+[Service]
+Type=forking
+ExecStart=/usr/sbin/nginx -c /etc/nginx/nginx.conf
+ExecReload=/usr/sbin/nginx -s reload
+ExecStop=/usr/sbin/nginx -s stop
+PIDFile=/var/run/nginx.pid
+Restart=always
+RestartSec=1s
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+        sudo systemctl daemon-reload
+        sudo systemctl enable nginx
+        sudo systemctl start nginx
+
+        log "NGINX built and installed with Brotli and HTTP/3 support."
     fi
 
-    # Install Brotli module if not present
-    if ! nginx -V 2>&1 | grep -q ngx_brotli; then
-        sudo apt install -y libbrotli-dev
-        # Note: May need to build NGINX with Brotli for full support
-        log "Brotli module installation may require custom build. Skipping for simplicity."
+    # Add load modules to nginx.conf if not present
+    if ! grep -q "load_module /usr/lib/nginx/modules/ngx_http_brotli_filter_module.so;" /etc/nginx/nginx.conf; then
+        sudo sed -i '1i load_module /usr/lib/nginx/modules/ngx_http_brotli_filter_module.so;' /etc/nginx/nginx.conf
+        sudo sed -i '2i load_module /usr/lib/nginx/modules/ngx_http_brotli_static_module.so;' /etc/nginx/nginx.conf
     fi
 
-    # Configure NGINX
+    # Configure NGINX optimizations
     sudo mkdir -p /etc/nginx/conf.d
     cat <<EOF | sudo tee /etc/nginx/conf.d/optimizations.conf
 # Brotli compression
@@ -144,10 +219,10 @@ install_php() {
     log "Starting PHP installation and optimization..."
 
     # Add PHP repository
+    sudo apt install -y software-properties-common lsb-release apt-transport-https ca-certificates wget
     if [ "$OS" = "ubuntu" ]; then
         sudo add-apt-repository -y ppa:ondrej/php
     else # Debian
-        sudo apt install -y lsb-release apt-transport-https ca-certificates
         wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
         echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list
     fi
@@ -180,7 +255,17 @@ install_databases() {
     # MariaDB
     if ! is_installed "mariadb-server"; then
         sudo apt install -y mariadb-server
-        sudo mysql_secure_installation
+        # Non-interactive mysql_secure_installation
+        sudo mysql_secure_installation <<EOF
+
+y
+y
+y
+y
+y
+y
+EOF
+        log "MariaDB secured non-interactively."
     else
         log "MariaDB is already installed."
     fi
@@ -190,15 +275,25 @@ install_databases() {
 [mysqld]
 innodb_buffer_pool_size = 1G
 max_connections = 200
+query_cache_size = 0
+query_cache_type = 0
+log_error = /var/log/mysql/error.log
 EOF
     sudo systemctl restart mariadb
 
     # PostgreSQL
     if ! is_installed "postgresql"; then
         sudo apt install -y postgresql
-        sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '$(openssl rand -base64 12)';"
-        # Secure: similar to mysql_secure_installation, manual steps
-        log "PostgreSQL installed. Run manual security steps if needed."
+        PG_PASSWORD=$(openssl rand -base64 12)
+        sudo -u postgres psql -c "ALTER USER postgres WITH PASSWORD '$PG_PASSWORD';"
+        log "PostgreSQL password set to $PG_PASSWORD (save this securely)."
+        # Secure PostgreSQL
+        sudo -u postgres psql <<EOF
+DROP DATABASE IF EXISTS test;
+REVOKE ALL PRIVILEGES ON SCHEMA public FROM public;
+\q
+EOF
+        log "PostgreSQL secured."
     else
         log "PostgreSQL is already installed."
     fi
@@ -206,6 +301,8 @@ EOF
     # Tune PostgreSQL
     sudo sed -i 's/#shared_buffers = 128MB/shared_buffers = 256MB/' /etc/postgresql/*/main/postgresql.conf
     sudo sed -i 's/#effective_cache_size = 4GB/effective_cache_size = 1GB/' /etc/postgresql/*/main/postgresql.conf
+    sudo sed -i 's/#work_mem = 4MB/work_mem = 16MB/' /etc/postgresql/*/main/postgresql.conf
+    sudo sed -i 's/#max_connections = 100/max_connections = 200/' /etc/postgresql/*/main/postgresql.conf
     sudo systemctl restart postgresql
 
     log "Databases configured and restarted."
@@ -216,10 +313,15 @@ configure_security() {
     log "Starting security tools configuration..."
 
     # UFW
-    sudo ufw allow OpenSSH
-    sudo ufw allow http
-    sudo ufw allow https
-    sudo ufw --force enable
+    if sudo ufw status | grep -q "Status: inactive"; then
+        sudo ufw allow OpenSSH
+        sudo ufw allow http
+        sudo ufw allow https
+        sudo ufw --force enable
+        log "UFW enabled with basic rules."
+    else
+        log "UFW is already enabled."
+    fi
 
     # Fail2Ban
     if ! is_installed "fail2ban"; then
@@ -229,11 +331,18 @@ configure_security() {
     cat <<EOF | sudo tee /etc/fail2ban/jail.d/sshd.local
 [sshd]
 enabled = true
+maxretry = 5
+findtime = 10m
+bantime = 1h
+ignoreip = 127.0.0.1/8
 EOF
 
     cat <<EOF | sudo tee /etc/fail2ban/jail.d/nginx-http-auth.local
 [nginx-http-auth]
 enabled = true
+maxretry = 5
+findtime = 10m
+bantime = 1h
 EOF
 
     sudo systemctl restart fail2ban
@@ -244,53 +353,108 @@ EOF
 install_otel() {
     log "Starting OpenTelemetry installation..."
 
-    if [ -z "$SIGNOZ_URL" ]; then
-        read -p "Enter SigNoz instance URL (default: http://localhost:4317): " SIGNOZ_URL
-        SIGNOZ_URL=${SIGNOZ_URL:-http://localhost:4317}
+    # Prompt for SigNoz details
+    if [ -z "$SIGNOZ_REGION" ]; then
+        read -p "Enter SigNoz region (e.g., us, eu, in): " SIGNOZ_REGION
+        SIGNOZ_REGION=${SIGNOZ_REGION:-us}
     fi
 
-    if [ -z "$SIGNOZ_KEY" ]; then
-        read -p "Enter SigNoz authentication key (or press enter to generate): " SIGNOZ_KEY
-        if [ -z "$SIGNOZ_KEY" ]; then
-            SIGNOZ_KEY=$(openssl rand -hex 16)
-            log "Generated SigNoz key: $SIGNOZ_KEY"
+    if [ -z "$SIGNOZ_INGESTION_KEY" ]; then
+        read -p "Enter SigNoz ingestion key: " SIGNOZ_INGESTION_KEY
+        if [ -z "$SIGNOZ_INGESTION_KEY" ]; then
+            log "SigNoz ingestion key is required. Exiting."
+            exit 1
         fi
     fi
 
-    # Download and install OTel Collector
-    if ! command_exists otelcol; then
-        curl -sSfL https://github.com/open-telemetry/opentelemetry-collector/releases/download/cmd/otelcol/v0.88.0/otelcol_0.88.0_linux_amd64.tar.gz -o otelcol.tar.gz
-        tar -xzf otelcol.tar.gz
-        sudo mv otelcol /usr/local/bin/
-        rm otelcol.tar.gz
+    OTEL_VERSION="0.116.0"
+    OTEL_DIR="/opt/otelcol-contrib"
+
+    # Download and install OTel Collector if not present
+    if ! command_exists otelcol-contrib; then
+        wget https://github.com/open-telemetry/opentelemetry-collector-releases/releases/download/v${OTEL_VERSION}/otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz
+        sudo mkdir -p "$OTEL_DIR"
+        sudo tar xvzf otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz -C "$OTEL_DIR"
+        rm otelcol-contrib_${OTEL_VERSION}_linux_amd64.tar.gz
+        sudo ln -s "$OTEL_DIR/otelcol-contrib" /usr/local/bin/otelcol-contrib
+        log "OpenTelemetry Collector installed."
     else
-        log "OTel Collector already installed."
+        log "OpenTelemetry Collector already installed."
     fi
 
     # Configure
-    cat <<EOF | sudo tee /etc/otelcol/config.yaml
+    cat <<EOF | sudo tee "$OTEL_DIR/config.yaml"
 receivers:
   otlp:
     protocols:
       grpc:
+        endpoint: 0.0.0.0:4317
       http:
+        endpoint: 0.0.0.0:4318
+  hostmetrics:
+    collection_interval: 60s
+    scrapers:
+      cpu: {}
+      disk: {}
+      load: {}
+      filesystem: {}
+      memory: {}
+      network: {}
+      paging: {}
+      process:
+        mute_process_name_error: true
+        mute_process_exe_error: true
+        mute_process_io_error: true
+      processes: {}
+  prometheus:
+    config:
+      global:
+        scrape_interval: 60s
+      scrape_configs:
+        - job_name: otel-collector-binary
+          static_configs:
+            - targets:
+                # - localhost:8888
 
 processors:
   batch:
+    send_batch_size: 1000
+    timeout: 10s
+  resourcedetection:
+    detectors: [env, system]
+    timeout: 2s
+    system:
+      hostname_sources: [os]
+
+extensions:
+  health_check: {}
+  zpages: {}
 
 exporters:
   otlp:
-    endpoint: "$SIGNOZ_URL"
+    endpoint: "ingest.${SIGNOZ_REGION}.signoz.cloud:443"
+    tls:
+      insecure: false
     headers:
-      "signoz-access-token": "$SIGNOZ_KEY"
+      "signoz-ingestion-key": "${SIGNOZ_INGESTION_KEY}"
+  debug:
+    verbosity: normal
 
 service:
+  telemetry:
+    metrics:
+      address: 0.0.0.0:8888
+  extensions: [health_check, zpages]
   pipelines:
-    traces:
+    metrics:
       receivers: [otlp]
       processors: [batch]
       exporters: [otlp]
-    metrics:
+    metrics/internal:
+      receivers: [prometheus, hostmetrics]
+      processors: [resourcedetection, batch]
+      exporters: [otlp]
+    traces:
       receivers: [otlp]
       processors: [batch]
       exporters: [otlp]
@@ -304,10 +468,14 @@ EOF
     cat <<EOF | sudo tee /etc/systemd/system/otelcol.service
 [Unit]
 Description=OpenTelemetry Collector
+After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/otelcol --config=/etc/otelcol/config.yaml
+ExecStart=/usr/local/bin/otelcol-contrib --config=${OTEL_DIR}/config.yaml
 Restart=always
+User=root
+Group=root
+Environment=SYSTEMD_LOG_LEVEL=debug
 
 [Install]
 WantedBy=multi-user.target
