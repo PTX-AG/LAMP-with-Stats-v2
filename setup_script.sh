@@ -142,6 +142,9 @@ install_nginx() {
         cd ngx_brotli
         git submodule update --init --recursive
         cd deps/brotli
+        mkdir -p build
+        cd build
+        cmake ..
         make
         cd ../../..
 
