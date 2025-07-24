@@ -303,10 +303,17 @@ EOF
 install_php() {
     log "Starting PHP installation and optimization..."
 
-    # Add PHP repository
+    # Add PHP repository only if not Ubuntu 25.04 (lunar)
     sudo apt install -y software-properties-common lsb-release apt-transport-https ca-certificates wget
-    if [ "$OS" = "ubuntu" ]; then
+    if [ "$OS" = "ubuntu" ] && [ "$CODENAME" != "lunar" ]; then
         sudo add-apt-repository -y ppa:ondrej/php
+    elif [ "$OS" = "ubuntu" ] && [ "$CODENAME" = "lunar" ]; then
+        # Remove ondrej/php PPA if exists to avoid 404 errors
+        if grep -r "ondrej/php" /etc/apt/sources.list.d/ > /dev/null 2>&1; then
+            log "Removing ondrej/php PPA for Ubuntu 25.04 (lunar) due to lack of support."
+            sudo add-apt-repository --remove -y ppa:ondrej/php || true
+            sudo rm -f /etc/apt/sources.list.d/ondrej-php-*.list || true
+        fi
     else # Debian
         wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
         echo "deb https://packages.sury.org/php/ $(lsb_release -sc) main" | sudo tee /etc/apt/sources.list.d/php.list
