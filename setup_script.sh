@@ -165,6 +165,7 @@ install_nginx() {
             log "ERROR: make failed in brotli build."
             exit 1
         fi
+        sudo make install
         cd "$HOME/nginx-${NGINX_VERSION}"
 
     # Display the current directory
