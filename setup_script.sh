@@ -105,7 +105,7 @@ fix_nginx_ppa() {
             log "Please verify your system's codename or update the script accordingly."
         fi
     else
-        log "OS is not Ubuntu, skipping nginx PPA fix."
+        log "OS is '$CODENAME' version of Ubuntu, skipping nginx PPA fix."
     fi
 }
 
@@ -140,9 +140,9 @@ install_nginx() {
 
 
         # Create build directory
-        BUILD_DIR="$(pwd)/build/nginx-${NGINX_VERSION}"
-        mkdir -p "$BUILD_DIR"
-        cd "$BUILD_DIR"
+        #BUILD_DIR="$(pwd)/build/nginx-${NGINX_VERSION}"
+        #mkdir -p "$BUILD_DIR"
+        #cd "$BUILD_DIR"
 
 
         # Remove existing ngx_brotli directory if it exists to avoid clone errors
@@ -185,7 +185,7 @@ install_nginx() {
             --user=nginx \
             --group=nginx \
             --with-compat \
-            --add-dynamic-module=/nginx-1.29.0/build/nginx-1.29.0/ngx_brotli/ngx_brotli \
+            --add-dynamic-module=ngx_brotli/ngx_brotli \
             --with-http_ssl_module \
             --with-http_v2_module \
             --with-http_v3_module \
