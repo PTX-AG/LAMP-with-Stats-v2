@@ -78,6 +78,30 @@ pre_flight_checks() {
     log "Pre-flight checks completed."
 }
 
+# Function to remove invalid nginx PPA and add correct one
+fix_nginx_ppa() {
+    if [ "$OS" = "ubuntu" ]; then
+        log "Fixing invalid nginx PPA if present..."
+
+        # Remove any existing nginx stable PPA referencing invalid codename
+        sudo sed -i '/nginx/d' /etc/apt/sources.list
+        sudo rm -f /etc/apt/sources.list.d/nginx-*.list
+
+        # Add correct nginx stable PPA for current codename
+        sudo add-apt-repository -y ppa:nginx/stable
+
+        # Update package lists
+        sudo apt update -y
+
+        log "nginx PPA fixed and updated."
+    else
+        log "OS is not Ubuntu, skipping nginx PPA fix."
+    fi
+}
+
+# Call fix_nginx_ppa before install_nginx
+fix_nginx_ppa
+
 # Function to install and configure NGINX with Brotli and HTTP/3
 install_nginx() {
     log "Starting NGINX installation and optimization..."
