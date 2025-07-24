@@ -185,7 +185,7 @@ install_nginx() {
             --user=nginx \
             --group=nginx \
             --with-compat \
-            --add-dynamic-module=ngx_brotli/ngx_brotli \
+            --add-dynamic-module=ngx_brotli \
             --with-http_ssl_module \
             --with-http_v2_module \
             --with-http_v3_module \
