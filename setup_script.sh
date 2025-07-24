@@ -313,6 +313,10 @@ install_php() {
             log "Removing ondrej/php PPA for Ubuntu 25.04 (lunar) due to lack of support."
             sudo add-apt-repository --remove -y ppa:ondrej/php || true
             sudo rm -f /etc/apt/sources.list.d/ondrej-php-*.list || true
+            # Remove any ondrej/php entries from sources.list as well
+            sudo sed -i '/ondrej\/php/d' /etc/apt/sources.list || true
+            # Remove any ondrej/php keys
+            sudo apt-key list | grep -B 1 "ondrej" | grep pub | awk '{print $2}' | xargs -r -I{} sudo apt-key del {} || true
         fi
     else # Debian
         wget -O /etc/apt/trusted.gpg.d/php.gpg https://packages.sury.org/php/apt.gpg
