@@ -83,17 +83,24 @@ fix_nginx_ppa() {
     if [ "$OS" = "ubuntu" ]; then
         log "Fixing invalid nginx PPA if present..."
 
-        # Remove any existing nginx stable PPA referencing invalid codename
+        # Remove any PPA files containing 'oracular' explicitly
+        sudo find /etc/apt/sources.list.d/ -type f -name "*.list" -exec grep -l "oracular" {} \; | xargs -r sudo rm -f
+
+        # Remove any existing nginx stable PPA entries from sources.list and sources.list.d
         sudo sed -i '/nginx/d' /etc/apt/sources.list
         sudo rm -f /etc/apt/sources.list.d/nginx-*.list
 
-        # Add correct nginx stable PPA for current codename
-        sudo add-apt-repository -y ppa:nginx/stable
-
-        # Update package lists
-        sudo apt update -y
-
-        log "nginx PPA fixed and updated."
+        # Validate CODENAME against known Ubuntu codenames
+        valid_codenames=("bionic" "focal" "jammy" "kinetic" "lunar" "mantic" "noble" "impish" "hirsute" "groovy" "focal" "eoan" "disco" "cosmic" "bionic" "xenial")
+        if [[ " ${valid_codenames[*]} " == *" $CODENAME "* ]]; then
+            log "Ubuntu codename $CODENAME is valid. Adding nginx stable PPA."
+            sudo add-apt-repository -y ppa:nginx/stable
+            sudo apt update -y
+            log "nginx PPA fixed and updated."
+        else
+            log "WARNING: Ubuntu codename '$CODENAME' is not recognized as valid. Skipping adding nginx stable PPA to avoid 404 errors."
+            log "Please verify your system's codename or update the script accordingly."
+        fi
     else
         log "OS is not Ubuntu, skipping nginx PPA fix."
     fi
