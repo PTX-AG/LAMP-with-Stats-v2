@@ -124,7 +124,7 @@ install_nginx() {
 
         # Install build dependencies
         sudo apt update -y
-        sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev git
+        sudo apt install -y build-essential libpcre3 libpcre3-dev zlib1g zlib1g-dev libssl-dev git cmake
 
         # Download NGINX source
         NGINX_VERSION="1.26.1"
